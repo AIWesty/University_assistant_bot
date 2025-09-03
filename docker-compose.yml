@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mybot}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-mybot}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    # Для прод не открываем наружу. Для локальной отладки можно раскомментировать:
+    # ports:
+    #   - "5432:5432"
+
+  # Можно оставить как отдельный сервис, но у нас миграции вызываются entrypointом,
+  # поэтому этот сервис не обязателен. Если хочешь — закомментируй «bot» ниже,
+  # а тут держи одноразовый прогон миграций
+  # migrations:
+  #   build: .
+  #   depends_on:
+  #     db:
+  #       condition: service_healthy
+  #   environment:
+  #     BOT_TOKEN: ${BOT_TOKEN}
+  #     LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  #     DB_URL: ${DB_URL}
+  #     ALEMBIC_DATABASE_URL: ${ALEMBIC_DATABASE_URL}
+  #   command: ["alembic", "upgrade", "head"]
+  #   restart: "no"
+
+  bot:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      ASYNC_DB_URL: ${ASYNC_DB_URL}                    # async URL для приложения
+      SYNC_DB_URL: ${SYNC_DB_URL}  # sync URL для alembic
+      ADMIN_IDS: ${ADMIN_IDS}
+    restart: unless-stopped
+    # если нужно — можно передать команду явно:
+    # command: ["python", "-m", "my_bot.bot"]
+
+volumes:
+  pgdata:
